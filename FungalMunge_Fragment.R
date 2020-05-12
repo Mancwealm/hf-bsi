@@ -43,7 +43,6 @@ BSI[organism %likeic% "anaerob|aerob|unidentified|flora|bacilli|non-fermenter|gr
 BSI[organism=="None",ResultValue:="None"]
 BSI[,organism:=toupper(organism)]
 
-BSI[,genus:=gsub("([[:alpha:]]+)[[:punct:][:space:]].*", "\\1", BSI$organism)]
 BSI[,commensal:=organism %likeic% paste(commensals$`NHSN Organism Name`,collapse="|")]
 BSI[,testpos:=gsub("^([[:digit:]]) of [[:digit:]].*", "\\1", quant)]
 BSI[,testtot:=gsub("^[[:digit:]] of ([[:digit:]]).*", "\\1", quant)]
@@ -51,22 +50,12 @@ BSI[quant %likeic% "isolated",c("testpos","testtot"):=list("1","1")]
 BSI[,join_time:=as.Date(Date)]
 
 #Compress this down to unique events
-BSI = unique(BSI[,.(STUDY_SUBJECT_DIGEST,join_time,Date,organism,genus,testpos,testtot,commensal,origin)])
+BSI = unique(BSI[,.(STUDY_SUBJECT_DIGEST,join_time,Date,organism,testpos,testtot,commensal,origin)])
 
 setkey(BSI, STUDY_SUBJECT_DIGEST,organism,join_time)
 
 BSI[organism!="None",nearmatch:=(difftime(Date, shift(Date),units="days")<=7)&(organism==shift(organism))|
       (difftime(shift(Date,type="lead"),Date,units="days")<=7)&(organism==shift(organism,type="lead")),by=c("STUDY_SUBJECT_DIGEST")]
-
-setkey(BSI, STUDY_SUBJECT_DIGEST,genus,join_time)
-#Then want to treat anything like 'species' or 'coagulase negative' etc. as a generic statement allowed to match against a more specific one
-generalterm = "sp$|sp\\.|spp$|species|coagulase negative"
-BSI[organism!="None",nearmatch:=
-      ((difftime(Date, shift(Date),units="days")<=7&(genus==shift(genus)))&
-         ((organism %likeic% generalterm & !(shift(organism) %likeic% generalterm))|(!(organism %likeic% generalterm) & (shift(organism) %likeic% generalterm))))|
-      ((difftime(Date, shift(Date,type="lead"),units="days")<=7&(genus==shift(genus,type="lead")))&
-         ((organism %likeic% generalterm & !(shift(organism,type="lead") %likeic% generalterm))|(!(organism %likeic% generalterm) & (shift(organism,type="lead") %likeic% generalterm))))|nearmatch==T,
-    by=c("STUDY_SUBJECT_DIGEST")]
 
 BSI[is.na(nearmatch),nearmatch:=F]
 BSI[organism!="None",BSI:=(nearmatch&commensal)|(commensal&testpos>1)|!commensal]
